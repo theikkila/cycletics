@@ -1,0 +1,22 @@
+---
+- name: Run elasticsearch on container
+  docker:
+    name: essi
+    image: elasticsearch
+    state: started
+    restart_policy: always
+    ports:
+    - "127.0.0.1:9200:9200"
+    volumes:
+    - "/srv/essi:/usr/share/elasticsearch/data"
+
+- name: Run kibana on container
+  docker:
+    name: kibana
+    image: kibana
+    state: started
+    restart_policy: always
+    links:
+    - "essi:elasticsearch"
+    ports:
+    - "127.0.0.1:5601:5601"
