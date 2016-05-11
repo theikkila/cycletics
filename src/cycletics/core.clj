@@ -44,7 +44,7 @@
   (esd/create conn "station-statuses" "snapshot" document))
 
 (defn start-pushing! []
-  (let [conn (esr/connect "http://elasticsearch:9200")]
+  (let [conn (esr/connect "http://essi:9200")]
     ; LOOP
     (loop [] ; go-loop
       (do
