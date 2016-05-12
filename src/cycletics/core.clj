@@ -5,11 +5,12 @@
             [clojurewerkz.elastisch.rest.document :as esd]
             [clj-time.core :as t]
             [clojure.core.async :as async :refer [go go-loop <!]]
-            [clj-time.format :as f])
+            [clj-time.format :as f]
+            [clojure.pprint :as pp])
   (:gen-class))
 
 ; curl -H 'Content-Type: application/json' https://dev.hsl.fi/matka.hsl.fi/otp/routers/hsl/bike_rental |jq .
-(def api-endpoint "https://dev.hsl.fi/matka.hsl.fi/otp/routers/hsl/bike_rental")
+(def api-endpoint "http://api.digitransit.fi/routing/v1/routers/hsl/bike_rental")
 
 
 (defn station->essential-station [full-station]
@@ -36,28 +37,46 @@
                       api-data-text
                       :key-fn keyword)
         stations (:stations full-data)]
-    {:timestamp (now)
-     :stations (map station->essential-station stations)}))
+    (map station->essential-station stations)))
 
+
+
+(defn add-timestamp-mapper [timestamp]
+  (fn [m]
+    (assoc m :timestamp timestamp)))
 
 (defn push-to-elasticsearch! [conn document]
-  (esd/create conn "station-statuses" "snapshot" document))
+  (esd/create conn "station-statuses-single" "station" document))
 
 (defn start-pushing! []
-  (let [conn (esr/connect "http://essi:9200")]
+  (let [conn (esr/connect "http://essi:9200")
+        push! (partial push-to-elasticsearch! conn)]
     ; LOOP
     (loop [] ; go-loop
       (do
         (println (now))
-        (push-to-elasticsearch! conn (current-station-status))
-        (Thread/sleep 10000) ;(<! (async/timeout 10000))
+        (dorun (map push! (pmap (add-timestamp-mapper (now)) (current-station-status))))
+        (Thread/sleep 60000) ;(<! (async/timeout 10000))
         (recur)))))
 
 
 
+;; OLD RECORDS
 
-
-
+; (defn handle-snapshot [push! snapshot]
+;   (let [ts (:timestamp snapshot)
+;         stations (:stations snapshot)
+;         tsmapper (add-timestamp-mapper ts)
+;         stations-with-timestamp (pmap tsmapper stations)]
+;     ;(pp/pprint stations-with-timestamp)
+;     (count (map push! stations-with-timestamp))))
+;
+; (let [conn (esr/connect "http://localhost:9200")
+;       push! (partial push-to-elasticsearch! conn)
+;       records (esd/search conn "station-statuses" "snapshot" :size 10000)
+;       snapshots (pmap :_source (-> records :hits :hits))
+;       push-snapshot! (partial handle-snapshot push!)]
+;   (pp/pprint (apply + (pmap push-snapshot! snapshots))))
 
 (defn -main
   "I don't do a whole lot ... yet."
